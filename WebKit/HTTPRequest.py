@@ -14,7 +14,7 @@ Cookie = CookieEngine.SimpleCookie
 from Request import Request
 import HTTPResponse
 
-debug = False
+debug = True
 
 
 class HTTPRequest(Request):

@@ -1,9 +1,9 @@
-import new
+# -*- coding: utf8 -*-
 
+import new
+from SQLObjectStore import SQLObjectStore, LostDatabaseConnection
 import MySQLdb
 from MySQLdb import Warning
-
-from SQLObjectStore import SQLObjectStore
 
 
 class MySQLObjectStore(SQLObjectStore):
@@ -91,21 +91,59 @@ class MySQLObjectStore(SQLObjectStore):
     def dbapiModule(self):
         return MySQLdb
 
-    def _executeSQL(self, cur, sql):
+    def _executeSQL(self, cur, sql, clausesArgs):
         try:
-            cur.execute(sql)
+            sql = sql.decode('utf8')
+        except UnicodeEncodeError:
+            print 'Query: ' + sql
+            raise
+        try:
+            cur.execute(sql, clausesArgs)
         except MySQLdb.Warning:
             if not self.setting('IgnoreSQLWarnings', False):
                 raise
+        except UnicodeDecodeError:
+            print 'Query: ' + sql
+            raise
+        except MySQLdb.OperationalError, e:
+            if e[0] == 2006:   # OperationalError: (2006, 'MySQL server has gone away')
+                raise LostDatabaseConnection()
 
     def sqlNowCall(self):
         return 'NOW()'
 
 
 # Mixins
+import re
+def escape_string(s):
+    # Replacement for mysql's built-in escape_string (which doesn't support utf8),
+    # and real_escape_string (which claims to support the connection's charset, 
+    # but seems to be broken).
+    # Characters encoded are NUL (ASCII 0), ‘\n’, ‘\r’, ‘\’, ‘'’, ‘"’, and Control-Z
+    # (same as the 
+    s = re.sub('\\\\', '\\\\\\\\', s)
+    s = re.sub('\x00', '\\\\0', s)
+    s = re.sub('\n', '\\\\n', s)
+    s = re.sub('\r', '\\\\r', s)
+    s = re.sub("\'", "\\\\'", s)
+    s = re.sub('\"', '\\\\"', s)
+    s = re.sub('\x1a', '\\\\Z', s)
+    return s
+
+def test_escape_string():
+    def test(s):
+        s1, s2 = repr(MySQLdb.escape_string(s)), repr(escape_string(s))
+        assert s1 == s2, "%s != %s" % (s1, s2)
+
+    test('''\0\\\n\\"\'''')
+    test('\\')
+    test('\n')
+    test("Paul Zehr\'s carefully researched study on the tabernacle of the Old Testament draws from both Christian and Jewish sources. He not only probes the nature of the construction of the tabernacle, but also explores its theological meaning.\r\n1981. 216 pages. Paper.")
+    assert escape_string(u'\xe4') == u'\xe4'
+
 
 class StringAttr(object):
 
     def sqlForNonNone(self, value):
         """MySQL provides a quoting function for string -- this method uses it."""
-        return "'" + MySQLdb.escape_string(value) + "'"
+        return "'%s'" % escape_string(value)

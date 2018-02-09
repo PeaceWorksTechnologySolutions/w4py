@@ -50,6 +50,13 @@ class Klass(object):
                 wr('    index (%s)' % attr.sqlName())
         wr('\n')
 
+    def sqlTableName(self):
+        return '`%s`' % self.name()
+
+class Attr:
+
+    def sqlName(self):
+        return "`%s`" % self.name()
 
 class EnumAttr(object):
 

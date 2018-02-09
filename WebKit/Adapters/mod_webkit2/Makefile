@@ -6,9 +6,9 @@
 #   the used tools
 
 #APXS=apxs
-APXS=/usr/sbin/apxs
+#APXS=/usr/sbin/apxs
 #APXS=/usr/local/apache2/bin/apxs
-#APXS=apxs2
+APXS=apxs2
 #APXS=/usr/sbin/apxs2
 
 APACHECTL=apachectl

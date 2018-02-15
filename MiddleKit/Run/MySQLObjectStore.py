@@ -91,7 +91,7 @@ class MySQLObjectStore(SQLObjectStore):
     def dbapiModule(self):
         return MySQLdb
 
-    def _executeSQL(self, cur, sql, clausesArgs):
+    def _executeSQL(self, cur, sql, clausesArgs=None):
         try:
             sql = sql.decode('utf8')
         except UnicodeEncodeError:

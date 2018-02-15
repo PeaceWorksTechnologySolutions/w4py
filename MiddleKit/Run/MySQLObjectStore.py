@@ -112,6 +112,25 @@ class MySQLObjectStore(SQLObjectStore):
     def sqlNowCall(self):
         return 'NOW()'
 
+    def sqlCaseInsensitiveLike(self, a, b):
+        # mysql is case-insensitive by default
+        return "%s like %s" % (a,b)
+
+
+class Klass(object):
+
+    def sqlTableName(self):
+        return "`%s`" % self.name()
+
+
+class Attr(object):
+
+    def sqlColumnName(self):
+        """ Returns the SQL column name corresponding to this attribute, consisting of self.name() + self.sqlTypeSuffix(). """
+        if not self._sqlColumnName:
+            self._sqlColumnName = "`%s`" % self.name()
+        return self._sqlColumnName
+
 
 # Mixins
 import re
@@ -119,7 +138,7 @@ def escape_string(s):
     # Replacement for mysql's built-in escape_string (which doesn't support utf8),
     # and real_escape_string (which claims to support the connection's charset, 
     # but seems to be broken).
-    # Characters encoded are NUL (ASCII 0), ‘\n’, ‘\r’, ‘\’, ‘'’, ‘"’, and Control-Z
+    # Characters encoded are NUL (ASCII 0), â€˜\nâ€™, â€˜\râ€™, â€˜\â€™, â€˜'â€™, â€˜"â€™, and Control-Z
     # (same as the 
     s = re.sub('\\\\', '\\\\\\\\', s)
     s = re.sub('\x00', '\\\\0', s)

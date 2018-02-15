@@ -1,11 +1,23 @@
 
 import os
 import sys
-import datetime
 
 from CodeGenerator import CodeGenerator
 from MiscUtils import AbstractError
 from MiddleKit.Core.ObjRefAttr import objRefJoin
+
+try:
+    import datetime
+except ImportError:
+    datetime = None
+
+try:
+    import mx.DateTime as mxDateTime
+except ImportError:
+    mxDateTime = None
+
+assert datetime is not None or mxDateTime is not None, "Cannot find Python's native datetime module or egenix's mx.DateTime module. You must have at least one."
+
 
 
 class PythonGenerator(CodeGenerator):
@@ -100,6 +112,8 @@ class Klass(object):
 
     def writePyImports(self):
         wr = self._pyOut.write
+        if mxDateTime:
+            wr('from mx import DateTime as mxDateTime\n')
         wr('''
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
@@ -457,31 +471,86 @@ class EnumAttr(object):
 
 class AnyDateTimeAttr(object):
 
+    def nativeDateTimeTypeName(self):
+        raise AbstractError, self.__class__
+
+    def mxDateTimeTypeName(self):
+        raise AbstractError, self.__class__
+
     def writePySetChecks(self, out):
         Attr.writePySetChecks.im_func(self, out)
-        typeName = self.nativeDateTimeTypeName()
-        if not isinstance(typeName, basestring):
-            typeName = '(%s)' % ', '.join(typeName)
         out.write('''\
         if value is not None:
+''')
+        if mxDateTime:
+            # I don't see anything for parsing in Python's datetime module, so only
+            # mx.DateTime users get this convenience (which has been in MiddleKit
+            # for years):
+            out.write('''\
+            if isinstance(value, basestring):
+                value = mxDateTime.%s(value)
+''' % self.mxDateTimeTypeName().replace('Type', 'From'))
+        else:
+            out.write('''\
             if isinstance(value, basestring):
                 value = %s(value)
+''' % (self.nativeDateTimeParser()))
+        dateTimeTypes = []
+        if datetime:
+            # Python's datetime types
+            typeNames = self.nativeDateTimeTypeName()
+            if not isinstance(typeNames, tuple):
+                typeNames = (typeNames,)
+            for typeName in typeNames:
+                dateTimeTypes.append(typeName)
+        if mxDateTime:
+            # egenix's mx.DateTime types
+            typeNames = self.mxDateTimeTypeName()
+            if not isinstance(typeNames, tuple):
+                typeNames = (typeNames,)
+            for typeName in typeNames:
+                dateTimeTypes.append('mxDateTime.' + typeName)
+        assert dateTimeTypes
+        if len(dateTimeTypes)>1:
+            dateTimeTypes = '(' + ', '.join(dateTimeTypes) + ')'
+        else:
+            dateTimeTypes = dateTimeTypes[0]
+
+        out.write('''
             if not isinstance(value, %s):
                 raise TypeError('expecting %s type (e.g., %s), but got'
                     ' value %%r of type %%r instead' %% (value, type(value)))
-''' % (self.nativeDateTimeParser(), typeName, self['Type'], typeName))
+''' % (dateTimeTypes, self['Type'], dateTimeTypes))
 
-    def writePyGet(self, out):
-        out.write('''
+    def writePyGetAsMXDateTime(self, out):
+        if datetime and mxDateTime and self.setting('ReturnMXDateTimes', False):
+            dateTimeTypes = []
+            typeNames = self.nativeDateTimeTypeName()
+            if not isinstance(typeNames, tuple):
+                typeNames = (typeNames,)
+            for typeName in typeNames:
+                dateTimeTypes.append(typeName)
+            dateTimeTypes = '(' + ', '.join(dateTimeTypes) + ')'
+            out.write('''
+    def %s(self):
+        if isinstance(self._%s, %s):
+            self._%s = mxDateTime.mktime(self._%s.timetuple())
+        return self._%s
+    ''' % (self.pyGetName(), self.name(), dateTimeTypes, self.name(), self.name(), self.name()))
+        else:
+            out.write('''
     def %s(self):
         return self._%s
-''' % (self.pyGetName(), self.name()))
+    ''' % (self.pyGetName(), self.name()))
 
 
 class DateAttr(object):
 
     def nativeDateTimeTypeName(self):
         return 'date'
+
+    def mxDateTimeTypeName(self):
+        return 'DateTimeType'
 
     def nativeDateTimeParser(self):
         return 'parseDate'
@@ -494,11 +563,17 @@ class DateAttr(object):
 ''')
         DateAttr.mixInSuperWritePySetChecks(self, out)
 
+    def writePyGet(self, out):
+        self.writePyGetAsMXDateTime(out)
+
 
 class TimeAttr(object):
 
     def nativeDateTimeTypeName(self):
         return ('time', 'timedelta')
+
+    def mxDateTimeTypeName(self):
+        return 'DateTimeDeltaType'
 
     def nativeDateTimeParser(self):
         return 'parseTime'
@@ -509,6 +584,11 @@ class TimeAttr(object):
         if isinstance(value, datetime):
             value = value.time()
 ''')
+        if mxDateTime:
+            out.write('''\
+        if isinstance(value, mxDateTime.DateTimeType):
+            value = mxDateTime.DateTimeDeltaFrom(value.time)
+''')
         TimeAttr.mixInSuperWritePySetChecks(self, out)
 
 
@@ -517,8 +597,14 @@ class DateTimeAttr(object):
     def nativeDateTimeTypeName(self):
         return 'datetime'
 
+    def mxDateTimeTypeName(self):
+        return 'DateTimeType'
+
     def nativeDateTimeParser(self):
         return 'parseDateTime'
+
+    def writePyGet(self, out):
+        self.writePyGetAsMXDateTime(out)
 
 
 class ObjRefAttr(object):

@@ -43,7 +43,7 @@ class ServletFactory(object):
         self._imp = self._app._imp
         self._cacheClasses = self._app.setting("CacheServletClasses", True)
         self._cacheInstances = self._app.setting("CacheServletInstances", True)
-        self._reloadClasses = self._app.setting("ReloadServletClasses", False)
+        self._reloadClasses = self._app.setting("ReloadServletClasses", True)
         # All caches are keyed on the path.
         # _classCache caches the servlet classes, in dictionaries
         # with keys 'mtime' and 'class'.  'mtime' is the
@@ -190,7 +190,7 @@ class ServletFactory(object):
                     initPyFile.write('#')
         fp, pathname, stuff = self._imp.find_module(moduleName, [directory])
         module = self._imp.load_module(fullModuleName, fp, pathname, stuff)
-        # module.__donotreload__ = self._reloadClasses
+        module.__donotreload__ = self._reloadClasses
         return module
 
     def loadClass(self, transaction, path):

@@ -108,6 +108,7 @@ class MySQLObjectStore(SQLObjectStore):
         except MySQLdb.OperationalError, e:
             if e[0] == 2006:   # OperationalError: (2006, 'MySQL server has gone away')
                 raise LostDatabaseConnection()
+            raise
 
     def sqlNowCall(self):
         return 'NOW()'

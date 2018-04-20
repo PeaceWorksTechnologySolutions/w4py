@@ -106,7 +106,7 @@ class MySQLObjectStore(SQLObjectStore):
             print 'Query: ' + sql
             raise
         except MySQLdb.OperationalError, e:
-            if e[0] == 2006:   # OperationalError: (2006, 'MySQL server has gone away')
+            if e[0] in (2006, 2013):   # OperationalError: (2006, 'MySQL server has gone away'), OperationalError: (2013, 'Lost connection to MySQL server during query')
                 raise LostDatabaseConnection()
             raise
 
